@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+data/*.db
+*.log
+exports/
+working_proxies_only.txt
+v/
+venv/
+.venv/
+gim.py
+PROJECT_FULL_ANALYSIS.md
