@@ -106,7 +106,7 @@ class DatabaseManager:
                             proxy, proxy_type, anonymity_level, response_time,
                             country, city, isp, server_type, last_checked,
                             status, check_count, success_count, fail_count
-                        ) VALUES (?, ?, 'Unknown', 0, 'Unknown', 'Unknown', 'Unknown', 'Unknown', ?, 'dead', 1, 0, 1)
+                        ) VALUES (?, 'Unknown', 'Unknown', 0, 'Unknown', 'Unknown', 'Unknown', 'Unknown', ?, 'dead', 1, 0, 1)
                         ON CONFLICT(proxy) DO UPDATE SET
                             last_checked=excluded.last_checked,
                             status='dead',
