@@ -124,7 +124,9 @@ class ProxyMasterController:
         self.console.print("[cyan]Phase 1: Scraping proxy sources...[/cyan]")
         raw_proxies = await self.scraper.scrape_all()
         if not raw_proxies:
-            self.console.print("[red]No proxies were retrieved. Check network access and logs.[/red]")
+            self.console.print("[red]No proxies were retrieved.[/red]")
+            if self.scraper.last_errors:
+                self.console.print("[yellow]All sources failed. Check your internet connection or DNS settings; see proxy_master.log for details.[/yellow]")
             await asyncio.to_thread(input, "\nPress Enter to return...")
             return
 
