@@ -1,94 +1,54 @@
+# Proxify - Proxy Classification Engine
 
-# 🛡️ Proxify - Advanced Proxy Engine
+Proxify is an asynchronous command-line tool that collects public proxy endpoints, verifies them, classifies their working protocol, and archives the results in SQLite.
 
-![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)
-![Asyncio](https://img.shields.io/badge/asyncio-enabled-success.svg)
-![SQLite](https://img.shields.io/badge/database-SQLite-lightgrey.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
+## Detected proxy types
 
-**Proxify** is an elite, fully asynchronous proxy scraper, validator, and manager. Built with a strict modular architecture, it efficiently scrapes thousands of free public proxies, validates them concurrently using `aiohttp`, and archives the working ones in a local SQLite database for quick access, categorization, and exporting.
+Each candidate is tested independently and classified as one of:
 
----
+- Http forward: HTTP requests through an HTTP proxy.
+- Http connect: HTTPS tunneling through an HTTP proxy using CONNECT.
+- Socks4: HTTPS access through a SOCKS4 proxy.
+- Socks 5: HTTPS access through a SOCKS5 proxy.
 
-## 🌟 Core Features
+When a proxy supports more than one protocol, the selected classification uses this precedence: Socks 5, Socks4, Http connect, Http forward. The scanner no longer labels a proxy as Elite merely because two URLs answered; anonymity remains Unknown unless a dedicated anonymity test is added.
 
-* **🚀 Asynchronous Engine:** Utilizes `asyncio` and `aiohttp` to scan hundreds of proxies concurrently without blocking the main thread, ensuring maximum speed and efficiency.
-* **🧠 Smart Validation:** Tests proxies against secure HTTPS endpoints to verify response time, protocol (HTTP/HTTPS), and anonymity level (Elite, Anonymous, Transparent).
-* **💾 Local Database Caching:** Uses `aiosqlite` to archive working proxies, preventing redundant network requests, avoiding API rate limits, and keeping a historical record of proxy reliability.
-* **🌍 Geo-IP Integration:** Resolves proxy locations (Country/City) locally using MaxMind GeoLite2 (if available) for zero-latency lookups.
-* **🎨 Rich CLI Dashboard:** A beautiful, interactive terminal user interface built with the `rich` library, providing real-time statistics and progress tracking.
-* **📁 Advanced Exporting:** Export active proxies filtered by Protocol (HTTP/HTTPS) or Anonymity Level directly to text files.
+## Architecture
 
----
+- core/config.py - centralized paths, URLs, limits, and environment overrides.
+- core/models.py - proxy data model and canonical protocol names.
+- engine/scraper.py - bounded, concurrent source collection and validation.
+- engine/scanner.py - concurrent protocol detection and optional GeoIP lookup.
+- database/db_manager.py - WAL-enabled SQLite storage with busy timeout and cooldown queries.
+- ui/cli.py - Rich terminal dashboard, reports, rechecking, and exports.
+- tests/ - deterministic tests for parsing, classification, and database counters.
 
-## 🏗️ Project Architecture
+## Installation and usage
 
-The project follows a strict modular design pattern to ensure scalability and maintainability:
+Install Python 3.8 or newer, then run:
 
-```text
-Proxify/
-├── core/          # Configuration settings and Data Models (Dataclasses)
-├── engine/        # The heavy lifters: Scraper and Async Scanner logic
-├── database/      # Asynchronous SQLite database manager
-├── ui/            # Interactive CLI controller and dashboard rendering
-├── data/          # Local storage for SQLite DB and GeoIP databases
-├── exports/       # Output directory for exported proxy lists
-└── main.py        # Application entry point
-```
+    pip install -r requirements.txt
+    python main.py
 
----
+The application creates data and exports directories automatically. GeoIP fields remain Unknown unless a compatible GeoLite2-City database is placed at data/GeoLite2-City.mmdb or PROXIFY_GEO_DB_PATH is set.
 
-## 🛠️ Prerequisites
+## Configuration
 
-* **Python:** 3.8 or higher
-* **Git:** To clone the repository
-* **Internet Connection:** Required for scraping and validating proxies
+The following environment variables can be used without changing source code:
 
----
+- PROXIFY_MAX_CONCURRENT_TASKS
+- PROXIFY_REQUEST_TIMEOUT
+- PROXIFY_SCAN_RETRIES
+- PROXIFY_RETRY_BACKOFF_SECONDS
+- PROXIFY_SQLITE_BUSY_TIMEOUT_MS
+- PROXIFY_DB_PATH
+- PROXIFY_GEO_DB_PATH
+- PROXIFY_LOG_LEVEL
 
-## 🚀 Installation & Usage
+Run the test suite with:
 
-**1. Clone the repository:**
-```bash
-git clone https://github.com/moAbdulqader/Proxify.git
-cd Proxify
-```
+    pytest -q
 
-**2. Install required dependencies:**
-```bash
-pip install -r requirements.txt
-```
+## Disclaimer
 
-**3. Run the application:**
-```bash
-python main.py
-```
-
----
-
-## 📊 Proxy Anonymity Levels Explained
-
-Proxify categorizes proxies into three main levels during validation:
-* **🟢 Elite (High Anonymity):** The proxy does not send your real IP address and does not identify itself as a proxy. (Best for privacy).
-* **🟡 Anonymous:** The proxy does not send your real IP address but identifies itself as a proxy.
-* **🔴 Transparent:** The proxy sends your real IP address. (Not recommended for privacy).
-
----
-
-## ⚠️ Disclaimer
-
-This tool is designed for educational and research purposes only. It fetches data from public, free proxy websites. The developer is not responsible for how these proxies are used or for any misuse of this tool. Always respect the terms of service of the websites you visit.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 👨‍💻 Author
-
-**Mohammed Abdulqader** 
-* GitHub: [@moAbdulqader](https://github.com/moAbdulqader)
-```
+This tool is intended for educational and research use with public proxy sources. Respect the terms of service and applicable laws of every destination and source you access.
