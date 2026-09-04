@@ -1,64 +1,97 @@
-import re
-import logging
 import asyncio
+import ipaddress
+import logging
+import re
+from typing import List, Optional, Set
+
 import aiohttp
-from typing import Set, List, Optional
+
 from core.config import Config
 
 logger = logging.getLogger(__name__)
 
+
 class ProxyScraper:
     def __init__(self):
-        # Pre-compile Regex patterns for high performance
-        self.patterns = [
-            re.compile(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{2,5}\b'),
-            re.compile(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\s+\d{2,5}\b')
-        ]
+        self.last_errors = []
+        self.pattern = re.compile(
+            r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?::|\s+)\d{1,5}(?!\d)"
+        )
 
     def _clean_proxy(self, proxy: str) -> Optional[str]:
-        """Normalize proxy string and validate numerical bounds."""
-        proxy = proxy.replace('http://', '').replace('https://', '').replace(' ', ':').replace('\t', ':')
-        
+        candidate = proxy.strip()
+        candidate = re.sub(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", "", candidate)
+        match = re.match(
+            r"^((?:\d{1,3}\.){3}\d{1,3})\s*:\s*(\d{1,5})$", candidate
+        ) or re.match(
+            r"^((?:\d{1,3}\.){3}\d{1,3})\s+(\d{1,5})$", candidate
+        )
+        if not match:
+            return None
+
+        host, port_text = match.groups()
         try:
-            ip, port = proxy.split(':')
-            if all(0 <= int(part) <= 255 for part in ip.split('.')) and 1 <= int(port) <= 65535:
-                return proxy
+            ipaddress.ip_address(host)
+            port = int(port_text)
+            if 1 <= port <= 65535:
+                return f"{host}:{port}"
         except ValueError:
             pass
-            
         return None
 
+    def _build_connector(self):
+        try:
+            from aiohttp.resolver import AsyncResolver
+            resolver = AsyncResolver(nameservers=list(Config.DNS_SERVERS))
+            return aiohttp.TCPConnector(resolver=resolver, ttl_dns_cache=300)
+        except (ImportError, OSError, RuntimeError) as exc:
+            logger.warning("Custom DNS resolver unavailable; using system resolver: %s", exc)
+            return aiohttp.TCPConnector(ttl_dns_cache=300)
+
     async def fetch_source(self, session: aiohttp.ClientSession, url: str) -> Set[str]:
-        """Fetch and extract proxies from a specific source."""
         proxies = set()
         try:
-            async with session.get(url, timeout=Config.REQUEST_TIMEOUT) as response:
-                if response.status == 200:
-                    # Enforce strict 5MB limit to mitigate Zip Bomb/Memory exhaustion attacks
-                    content = await response.content.read(Config.MAX_DOWNLOAD_SIZE)
-                    text = content.decode('utf-8', errors='ignore')
-                    
-                    for pattern in self.patterns:
-                        for match in pattern.findall(text):
-                            cleaned = self._clean_proxy(match)
-                            if cleaned:
-                                proxies.add(cleaned)
+            timeout = aiohttp.ClientTimeout(total=Config.REQUEST_TIMEOUT)
+            async with session.get(url, timeout=timeout) as response:
+                if response.status != 200:
+                    message = f"{url}: HTTP {response.status}"
+                    self.last_errors.append(message)
+                    logger.warning("Source returned HTTP %s: %s", response.status, url)
+                    return proxies
+                content = await response.content.read(Config.MAX_DOWNLOAD_SIZE + 1)
+                if len(content) > Config.MAX_DOWNLOAD_SIZE:
+                    logger.warning("Source exceeded size limit: %s", url)
+                    content = content[:Config.MAX_DOWNLOAD_SIZE]
+                text = content.decode("utf-8", errors="ignore")
+                for match in self.pattern.findall(text):
+                    cleaned = self._clean_proxy(match)
+                    if cleaned:
+                        proxies.add(cleaned)
         except asyncio.TimeoutError:
-            logger.warning(f"Timeout scraping source: {url}")
-        except Exception as e:
-            logger.error(f"Error scraping {url}: {e}")
-            
+            message = f"{url}: timeout"
+            self.last_errors.append(message)
+            logger.warning("Timeout scraping source: %s", url)
+        except (aiohttp.ClientError, UnicodeError) as exc:
+            message = f"{url}: {exc}"
+            self.last_errors.append(message)
+            logger.error("Error scraping %s: %s", url, exc)
+        except Exception as exc:
+            message = f"{url}: {exc}"
+            self.last_errors.append(message)
+            logger.error("Unexpected scraping error %s: %s", url, exc)
         return proxies
 
     async def scrape_all(self) -> List[str]:
-        """Concurrently scrape all defined sources."""
         all_proxies = set()
-        async with aiohttp.ClientSession() as session:
-            tasks = [self.fetch_source(session, url) for url in Config.PROXY_SOURCES]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            for result_set in results:
-                if isinstance(result_set, set):
-                    all_proxies.update(result_set)
-                    
-        return list(all_proxies)
+        self.last_errors = []
+        timeout = aiohttp.ClientTimeout(total=Config.REQUEST_TIMEOUT)
+        connector = self._build_connector()
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=False, connector=connector) as session:
+            results = await asyncio.gather(
+                *(self.fetch_source(session, url) for url in Config.PROXY_SOURCES),
+                return_exceptions=True,
+            )
+        for result in results:
+            if isinstance(result, set):
+                all_proxies.update(result)
+        return sorted(all_proxies)
