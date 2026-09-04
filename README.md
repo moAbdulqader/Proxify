@@ -30,7 +30,7 @@ Install Python 3.8 or newer, then run:
     pip install -r requirements.txt
     python main.py
 
-The application creates data and exports directories automatically. GeoIP fields remain Unknown unless a compatible GeoLite2-City database is placed at data/GeoLite2-City.mmdb or PROXIFY_GEO_DB_PATH is set.
+The application creates data and exports directories automatically. It uses a configurable DNS resolver for mobile and restricted networks; set PROXIFY_DNS_SERVERS to your preferred comma-separated DNS servers if needed. GeoIP fields remain Unknown unless a compatible GeoLite2-City database is placed at data/GeoLite2-City.mmdb or PROXIFY_GEO_DB_PATH is set.
 
 ## Configuration
 
@@ -44,6 +44,7 @@ The following environment variables can be used without changing source code:
 - PROXIFY_DB_PATH
 - PROXIFY_GEO_DB_PATH
 - PROXIFY_LOG_LEVEL
+- PROXIFY_DNS_SERVERS (comma-separated, default: 1.1.1.1,8.8.8.8)
 
 Run the test suite with:
 
