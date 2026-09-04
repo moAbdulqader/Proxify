@@ -17,6 +17,11 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+def _env_list(name: str, default: str):
+    value = os.getenv(name, default)
+    return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
 class Config:
     BASE_DIR = Path(__file__).resolve().parent.parent
     DATA_DIR = BASE_DIR / "data"
@@ -31,6 +36,7 @@ class Config:
     SCAN_RETRIES = max(0, _env_int("PROXIFY_SCAN_RETRIES", 1))
     RETRY_BACKOFF_SECONDS = max(0.0, _env_float("PROXIFY_RETRY_BACKOFF_SECONDS", 0.5))
     SQLITE_BUSY_TIMEOUT_MS = max(1000, _env_int("PROXIFY_SQLITE_BUSY_TIMEOUT_MS", 15000))
+    DNS_SERVERS = _env_list("PROXIFY_DNS_SERVERS", "1.1.1.1,8.8.8.8")
 
     HTTP_FORWARD_TEST_URL = os.getenv("PROXIFY_HTTP_FORWARD_TEST_URL", "http://api.ipify.org?format=json")
     HTTP_CONNECT_TEST_URL = os.getenv("PROXIFY_HTTP_CONNECT_TEST_URL", "https://api.ipify.org?format=json")
