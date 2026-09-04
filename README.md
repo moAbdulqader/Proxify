@@ -163,6 +163,21 @@ The repository includes `pytest.ini` and an explicit `core/__init__.py` so the t
 
 Proxify is intended for educational, defensive, and research use with publicly available proxy sources. Only access destinations and sources you are authorized to use. Respect applicable laws, terms of service, rate limits, and network policies. The project does not guarantee that a public proxy is safe, anonymous, stable, or suitable for sensitive traffic.
 
+## Versioning
+
+The current stable release is **v1.0.0**. The canonical version is stored in the root `VERSION` file and is mirrored here for discoverability.
+
+| Version | Status | Highlights |
+| --- | --- | --- |
+| `v1.0.0` | Stable | Proxy protocol classification hardening, SQLite reliability improvements, DNS configuration, statistics, exports, and automated tests. |
+
+Branch naming follows the release target and the purpose of the work:
+
+- `main` contains the latest stable release.
+- `release/vX.Y.Z-description` identifies a completed or stabilization release line.
+- `feature/vX.Y.Z-description` contains work targeting the next version.
+
+Versions follow Semantic Versioning: major versions may contain breaking changes, minor versions add backwards-compatible capabilities, and patch versions contain backwards-compatible fixes or documentation updates.
 ## License
 
 No license file is currently included in the repository. Until a license is added, all rights remain with the repository owner.
