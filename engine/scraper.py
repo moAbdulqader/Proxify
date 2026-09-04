@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 class ProxyScraper:
     def __init__(self):
+        self.last_errors = []
         self.pattern = re.compile(
             r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?::|\s+)\d{1,5}(?!\d)"
         )
@@ -38,12 +39,23 @@ class ProxyScraper:
             pass
         return None
 
+    def _build_connector(self):
+        try:
+            from aiohttp.resolver import AsyncResolver
+            resolver = AsyncResolver(nameservers=list(Config.DNS_SERVERS))
+            return aiohttp.TCPConnector(resolver=resolver, ttl_dns_cache=300)
+        except (ImportError, OSError, RuntimeError) as exc:
+            logger.warning("Custom DNS resolver unavailable; using system resolver: %s", exc)
+            return aiohttp.TCPConnector(ttl_dns_cache=300)
+
     async def fetch_source(self, session: aiohttp.ClientSession, url: str) -> Set[str]:
         proxies = set()
         try:
             timeout = aiohttp.ClientTimeout(total=Config.REQUEST_TIMEOUT)
             async with session.get(url, timeout=timeout) as response:
                 if response.status != 200:
+                    message = f"{url}: HTTP {response.status}"
+                    self.last_errors.append(message)
                     logger.warning("Source returned HTTP %s: %s", response.status, url)
                     return proxies
                 content = await response.content.read(Config.MAX_DOWNLOAD_SIZE + 1)
@@ -56,17 +68,25 @@ class ProxyScraper:
                     if cleaned:
                         proxies.add(cleaned)
         except asyncio.TimeoutError:
+            message = f"{url}: timeout"
+            self.last_errors.append(message)
             logger.warning("Timeout scraping source: %s", url)
         except (aiohttp.ClientError, UnicodeError) as exc:
-            logger.warning("Source request failed %s: %s", url, exc)
+            message = f"{url}: {exc}"
+            self.last_errors.append(message)
+            logger.error("Error scraping %s: %s", url, exc)
         except Exception as exc:
+            message = f"{url}: {exc}"
+            self.last_errors.append(message)
             logger.error("Unexpected scraping error %s: %s", url, exc)
         return proxies
 
     async def scrape_all(self) -> List[str]:
         all_proxies = set()
+        self.last_errors = []
         timeout = aiohttp.ClientTimeout(total=Config.REQUEST_TIMEOUT)
-        async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as session:
+        connector = self._build_connector()
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=False, connector=connector) as session:
             results = await asyncio.gather(
                 *(self.fetch_source(session, url) for url in Config.PROXY_SOURCES),
                 return_exceptions=True,
